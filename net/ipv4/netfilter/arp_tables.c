@@ -1105,18 +1105,56 @@ static int do_add_counters(struct net *net, const void __user *user,
 	unsigned int i, curcpu;
 	struct xt_counters_info tmp;
 	struct xt_counters *paddc;
+	unsigned int num_counters;
+	const char *name;
+	int size;
+	void *ptmp;
 	struct xt_table *t;
 	const struct xt_table_info *private;
 	int ret = 0;
 	void *loc_cpu_entry;
 	struct arpt_entry *iter;
 	unsigned int addend;
+#ifdef CONFIG_COMPAT
+	struct compat_xt_counters_info compat_tmp;
 
-	paddc = xt_copy_counters_from_user(user, len, &tmp, compat);
-	if (IS_ERR(paddc))
-		return PTR_ERR(paddc);
+	if (compat) {
+		ptmp = &compat_tmp;
+		size = sizeof(struct compat_xt_counters_info);
+	} else
+#endif
+	{
+		ptmp = &tmp;
+		size = sizeof(struct xt_counters_info);
+	}
 
-	t = xt_find_table_lock(net, NFPROTO_ARP, tmp.name);
+	if (copy_from_user(ptmp, user, size) != 0)
+		return -EFAULT;
+
+#ifdef CONFIG_COMPAT
+	if (compat) {
+		num_counters = compat_tmp.num_counters;
+		name = compat_tmp.name;
+	} else
+#endif
+	{
+		num_counters = tmp.num_counters;
+		name = tmp.name;
+	}
+
+	if (len != size + num_counters * sizeof(struct xt_counters))
+		return -EINVAL;
+
+	paddc = vmalloc(len - size);
+	if (!paddc)
+		return -ENOMEM;
+
+	if (copy_from_user(paddc, user + size, len - size) != 0) {
+		ret = -EFAULT;
+		goto free;
+	}
+
+	t = xt_find_table_lock(net, NFPROTO_ARP, name);
 	if (IS_ERR_OR_NULL(t)) {
 		ret = t ? PTR_ERR(t) : -ENOENT;
 		goto free;
@@ -1124,7 +1162,7 @@ static int do_add_counters(struct net *net, const void __user *user,
 
 	local_bh_disable();
 	private = t->private;
-	if (private->number != tmp.num_counters) {
+	if (private->number != num_counters) {
 		ret = -EINVAL;
 		goto unlock_up_free;
 	}
@@ -1170,22 +1208,19 @@ static inline void compat_release_entry(struct compat_arpt_entry *e)
 	module_put(t->u.kernel.target->me);
 }
 
-static int
+static inline int
 check_compat_entry_size_and_hooks(struct compat_arpt_entry *e,
 				  struct xt_table_info *newinfo,
 				  unsigned int *size,
 				  const unsigned char *base,
 				  const unsigned char *limit,
 				  const unsigned int *hook_entries,
-				  const unsigned int *underflows,
-				  const char *name)
-				  const unsigned char *limit)
 				  const unsigned int *underflows)
 {
 	struct xt_entry_target *t;
 	struct xt_target *target;
 	unsigned int entry_offset;
-	int ret, off;
+	int ret, off, h;
 
 	duprintf("check_compat_entry_size_and_hooks %p\n", e);
 	if ((unsigned long)e % __alignof__(struct compat_arpt_entry) != 0 ||
@@ -1230,6 +1265,17 @@ check_compat_entry_size_and_hooks(struct compat_arpt_entry *e,
 	if (ret)
 		goto release_target;
 
+	/* Check hooks & underflows */
+	for (h = 0; h < NF_ARP_NUMHOOKS; h++) {
+		if ((unsigned char *)e - base == hook_entries[h])
+			newinfo->hook_entry[h] = hook_entries[h];
+		if ((unsigned char *)e - base == underflows[h])
+			newinfo->underflow[h] = underflows[h];
+	}
+
+	/* Clear counters and comefrom */
+	memset(&e->counters, 0, sizeof(e->counters));
+	e->comefrom = 0;
 	return 0;
 
 release_target:
@@ -1238,7 +1284,7 @@ out:
 	return ret;
 }
 
-static int
+static void
 compat_copy_entry_from_user(struct compat_arpt_entry *e, void **dstptr,
 			    unsigned int *size,
 			    struct xt_table_info *newinfo, unsigned char *base)
@@ -1247,9 +1293,8 @@ compat_copy_entry_from_user(struct compat_arpt_entry *e, void **dstptr,
 	struct xt_target *target;
 	struct arpt_entry *de;
 	unsigned int origsize;
-	int ret, h;
+	int h;
 
-	ret = 0;
 	origsize = *size;
 	de = (struct arpt_entry *)*dstptr;
 	memcpy(de, e, sizeof(struct arpt_entry));
@@ -1270,7 +1315,6 @@ compat_copy_entry_from_user(struct compat_arpt_entry *e, void **dstptr,
 		if ((unsigned char *)de - base < newinfo->underflow[h])
 			newinfo->underflow[h] -= origsize - *size;
 	}
-	return ret;
 }
 
 static int translate_compat_table(struct xt_table_info **pinfo,
@@ -1281,7 +1325,7 @@ static int translate_compat_table(struct xt_table_info **pinfo,
 	struct xt_table_info *newinfo, *info;
 	void *pos, *entry0, *entry1;
 	struct compat_arpt_entry *iter0;
-	struct arpt_replace repl;
+	struct arpt_entry *iter1;
 	unsigned int size;
 	int ret = 0;
 
@@ -1289,6 +1333,12 @@ static int translate_compat_table(struct xt_table_info **pinfo,
 	entry0 = *pentry0;
 	size = compatr->size;
 	info->number = compatr->num_entries;
+
+	/* Init all hooks to impossible value. */
+	for (i = 0; i < NF_ARP_NUMHOOKS; i++) {
+		info->hook_entry[i] = 0xFFFFFFFF;
+		info->underflow[i] = 0xFFFFFFFF;
+	}
 
 	duprintf("translate_compat_table: size %u\n", info->size);
 	j = 0;
@@ -1298,11 +1348,6 @@ static int translate_compat_table(struct xt_table_info **pinfo,
 	xt_entry_foreach(iter0, entry0, compatr->size) {
 		ret = check_compat_entry_size_and_hooks(iter0, info, &size,
 							entry0,
-							entry0 + total_size,
-							hook_entries,
-							underflows,
-							name);
-							entry0 + compatr->size);
 							entry0 + compatr->size,
 							compatr->hook_entry,
 							compatr->underflow);
@@ -1348,23 +1393,11 @@ static int translate_compat_table(struct xt_table_info **pinfo,
 	entry1 = newinfo->entries[raw_smp_processor_id()];
 	pos = entry1;
 	size = compatr->size;
-	xt_entry_foreach(iter0, entry0, compatr->size) {
-		ret = compat_copy_entry_from_user(iter0, &pos, &size,
-						  newinfo, entry1);
-		if (ret != 0)
-			break;
-	}
-	size = compatr->size;
 	xt_entry_foreach(iter0, entry0, compatr->size)
 		compat_copy_entry_from_user(iter0, &pos, &size,
 					    newinfo, entry1);
-
-	/* all module references in entry0 are now gone */
-
 	xt_compat_flush_offsets(NFPROTO_ARP);
 	xt_compat_unlock(NFPROTO_ARP);
-	if (ret)
-		goto free_newinfo;
 
 	ret = -ELOOP;
 	if (!mark_source_chains(newinfo, compatr->valid_hooks, entry1))
@@ -1402,19 +1435,12 @@ static int translate_compat_table(struct xt_table_info **pinfo,
 		}
 		xt_free_table_info(newinfo);
 		return ret;
-	memcpy(&repl, compatr, sizeof(*compatr));
-
-	for (i = 0; i < NF_ARP_NUMHOOKS; i++) {
-		repl.hook_entry[i] = newinfo->hook_entry[i];
-		repl.underflow[i] = newinfo->underflow[i];
 	}
 
-	repl.num_counters = 0;
-	repl.counters = NULL;
-	repl.size = newinfo->size;
-	ret = translate_table(newinfo, entry1, &repl);
-	if (ret)
-		goto free_newinfo;
+	/* And one copy for every other CPU */
+	for_each_possible_cpu(i)
+		if (newinfo->entries[i] && newinfo->entries[i] != entry1)
+			memcpy(newinfo->entries[i], entry1, newinfo->size);
 
 	*pinfo = newinfo;
 	*pentry0 = entry1;
@@ -1424,17 +1450,16 @@ static int translate_compat_table(struct xt_table_info **pinfo,
 free_newinfo:
 	xt_free_table_info(newinfo);
 out:
-	xt_entry_foreach(iter0, entry0, total_size) {
-	return ret;
-out_unlock:
-	xt_compat_flush_offsets(NFPROTO_ARP);
-	xt_compat_unlock(NFPROTO_ARP);
 	xt_entry_foreach(iter0, entry0, compatr->size) {
 		if (j-- == 0)
 			break;
 		compat_release_entry(iter0);
 	}
 	return ret;
+out_unlock:
+	xt_compat_flush_offsets(NFPROTO_ARP);
+	xt_compat_unlock(NFPROTO_ARP);
+	goto out;
 }
 
 static int compat_do_replace(struct net *net, void __user *user,
@@ -1870,3 +1895,4 @@ EXPORT_SYMBOL(arpt_do_table);
 
 module_init(arp_tables_init);
 module_exit(arp_tables_fini);
+
