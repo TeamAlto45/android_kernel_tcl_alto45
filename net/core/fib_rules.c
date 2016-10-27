@@ -198,7 +198,6 @@ out:
 	return (rule->flags & FIB_RULE_INVERT) ? !ret : ret;
 }
 
-
 int fib_rules_lookup(struct fib_rules_ops *ops, struct flowi *fl,
 		     int flags, struct fib_lookup_arg *arg)
 {
@@ -580,11 +579,7 @@ static int fib_nl_fill_rule(struct sk_buff *skb, struct fib_rule *rule,
 	    ((rule->mark_mask || rule->mark) &&
 	     nla_put_u32(skb, FRA_FWMASK, rule->mark_mask)) ||
 	    (rule->target &&
-	     nla_put_u32(skb, FRA_GOTO, rule->target)) ||
-	    (uid_valid(rule->uid_start) &&
-	     nla_put_uid(skb, FRA_UID_START, rule->uid_start)) ||
-	    (uid_valid(rule->uid_end) &&
-	     nla_put_uid(skb, FRA_UID_END, rule->uid_end)))
+	     nla_put_u32(skb, FRA_GOTO, rule->target)))
 		goto nla_put_failure;
 	if (ops->fill(rule, skb, frh) < 0)
 		goto nla_put_failure;
@@ -601,17 +596,15 @@ static int dump_rules(struct sk_buff *skb, struct netlink_callback *cb,
 {
 	int idx = 0;
 	struct fib_rule *rule;
-	int err = 0;
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(rule, &ops->rules_list, list) {
 		if (idx < cb->args[1])
 			goto skip;
 
-		err = fib_nl_fill_rule(skb, rule, NETLINK_CB(cb->skb).portid,
-				       cb->nlh->nlmsg_seq, RTM_NEWRULE,
-				       NLM_F_MULTI, ops);
-		if (err < 0)
+		if (fib_nl_fill_rule(skb, rule, NETLINK_CB(cb->skb).portid,
+				     cb->nlh->nlmsg_seq, RTM_NEWRULE,
+				     NLM_F_MULTI, ops) < 0)
 			break;
 skip:
 		idx++;
@@ -620,7 +613,7 @@ skip:
 	cb->args[1] = idx;
 	rules_ops_put(ops);
 
-	return err;
+	return skb->len;
 }
 
 static int fib_nl_dumprule(struct sk_buff *skb, struct netlink_callback *cb)
@@ -636,9 +629,7 @@ static int fib_nl_dumprule(struct sk_buff *skb, struct netlink_callback *cb)
 		if (ops == NULL)
 			return -EAFNOSUPPORT;
 
-		dump_rules(skb, cb, ops);
-
-		return skb->len;
+		return dump_rules(skb, cb, ops);
 	}
 
 	rcu_read_lock();
@@ -787,3 +778,4 @@ fail:
 }
 
 subsys_initcall(fib_rules_init);
+
