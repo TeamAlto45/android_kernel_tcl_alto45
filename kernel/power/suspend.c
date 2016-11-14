@@ -337,8 +337,8 @@ static int enter_state(suspend_state_t state)
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	sys_sync();
 	printk("done.\n");
-#endif
-	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
+
+	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state].label);
 	error = suspend_prepare(state);
 	if (error)
 		goto Unlock;
@@ -397,3 +397,5 @@ int pm_suspend(suspend_state_t state)
 	return error;
 }
 EXPORT_SYMBOL(pm_suspend);
+
+
