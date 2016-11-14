@@ -26,6 +26,9 @@ unsigned int __read_mostly freeze_timeout_msecs = 20 * MSEC_PER_SEC;
 static int try_to_freeze_tasks(bool user_only)
 {
 	struct task_struct *g, *p;
+#if defined(CONFIG_SEC_PM_DEBUG)
+	struct task_struct *q;
+#endif /* CONFIG_SEC_PM_DEBUG */
 	unsigned long end_time;
 	unsigned int todo;
 	bool wq_busy = false;
@@ -49,8 +52,22 @@ static int try_to_freeze_tasks(bool user_only)
 			if (p == current || !freeze_task(p))
 				continue;
 
-			if (!freezer_should_skip(p))
+			/*
+			 * Now that we've done set_freeze_flag, don't
+			 * perturb a task in TASK_STOPPED or TASK_TRACED.
+			 * It is "frozen enough".  If the task does wake
+			 * up, it will immediately call try_to_freeze.
+			 *
+			 * Because freeze_task() goes through p's scheduler lock, it's
+			 * guaranteed that TASK_STOPPED/TRACED -> TASK_RUNNING
+			 * transition can't race with task state testing here.
+			 */
+			if (!freezer_should_skip(p)) {
 				todo++;
+#if defined(CONFIG_SEC_PM_DEBUG)
+				q = p;
+#endif /* CONFIG_SEC_PM_DEBUG */
+			}
 		} while_each_thread(g, p);
 		read_unlock(&tasklist_lock);
 
@@ -84,11 +101,19 @@ static int try_to_freeze_tasks(bool user_only)
 
 	if (todo) {
 		printk("\n");
-		printk(KERN_ERR "Freezing of tasks %s after %d.%03d seconds "
+		printk(KERN_ERR "Freezing of tasks %s after %d.%02d seconds "
 		       "(%d tasks refusing to freeze, wq_busy=%d):\n",
 		       wakeup ? "aborted" : "failed",
 		       elapsed_msecs / 1000, elapsed_msecs % 1000,
 		       todo - wq_busy, wq_busy);
+
+#if defined(CONFIG_SEC_PM_DEBUG)
+		if(wakeup) {
+			printk(KERN_ERR "Freezing of %s aborted (%d) (%s)\n",
+					user_only ? "user space " : "tasks ",
+					q ? q->pid : 0, q ? q->comm : "NONE");
+		}
+#endif /* CONFIG_SEC_PM_DEBUG */
 
 		if (!wakeup) {
 			read_lock(&tasklist_lock);
@@ -107,28 +132,6 @@ static int try_to_freeze_tasks(bool user_only)
 	return todo ? -EBUSY : 0;
 }
 
-/*
- * Returns true if all freezable tasks (except for current) are frozen already
- */
-static bool check_frozen_processes(void)
-{
-	struct task_struct *g, *p;
-	bool ret = true;
-
-	read_lock(&tasklist_lock);
-	for_each_process_thread(g, p) {
-		if (p != current && !freezer_should_skip(p) &&
-		    !frozen(p)) {
-			ret = false;
-			goto done;
-		}
-	}
-done:
-	read_unlock(&tasklist_lock);
-
-	return ret;
-}
-
 /**
  * freeze_processes - Signal user space processes to enter the refrigerator.
  *
@@ -137,7 +140,6 @@ done:
 int freeze_processes(void)
 {
 	int error;
-	int oom_kills_saved;
 
 	error = __usermodehelper_disable(UMH_FREEZING);
 	if (error)
@@ -148,27 +150,12 @@ int freeze_processes(void)
 
 	printk("Freezing user space processes ... ");
 	pm_freezing = true;
-	oom_kills_saved = oom_kills_count();
 	error = try_to_freeze_tasks(true);
 	if (!error) {
+		printk("done.");
 		__usermodehelper_set_disable_depth(UMH_DISABLED);
 		oom_killer_disable();
-
-		/*
-		 * There might have been an OOM kill while we were
-		 * freezing tasks and the killed task might be still
-		 * on the way out so we have to double check for race.
-		 */
-		if (oom_kills_count() != oom_kills_saved &&
-				!check_frozen_processes()) {
-			__usermodehelper_set_disable_depth(UMH_ENABLED);
-			printk("OOM in progress.");
-			error = -EBUSY;
-			goto done;
-		}
-		printk("done.");
 	}
-done:
 	printk("\n");
 	BUG_ON(in_atomic());
 
@@ -249,4 +236,5 @@ void thaw_kernel_threads(void)
 	schedule();
 	printk("done.\n");
 }
+
 
