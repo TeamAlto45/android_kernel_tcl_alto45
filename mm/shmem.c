@@ -1957,29 +1957,15 @@ static long shmem_fallocate(struct file *file, int mode, loff_t offset,
 									NULL);
 		if (error) {
 			/* Remove the !PageUptodate pages we added */
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> d3f0dd0... tmpfs: fix regression hang in fallocate undo
-=======
->>>>>>> d3f0dd0... tmpfs: fix regression hang in fallocate undo
 			if (index > start) {
 				shmem_undo_range(inode,
 				 (loff_t)start << PAGE_CACHE_SHIFT,
 				 ((loff_t)index << PAGE_CACHE_SHIFT) - 1, true);
 			}
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
+
 			shmem_undo_range(inode,
 				(loff_t)start << PAGE_CACHE_SHIFT,
 				((loff_t)index << PAGE_CACHE_SHIFT) - 1, true);
->>>>>>> 80c759d... tmpfs: don't undo fallocate past its last page
-=======
->>>>>>> d3f0dd0... tmpfs: fix regression hang in fallocate undo
-=======
->>>>>>> d3f0dd0... tmpfs: fix regression hang in fallocate undo
 			goto undone;
 		}
 
