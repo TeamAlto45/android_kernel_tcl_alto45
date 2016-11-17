@@ -3232,15 +3232,7 @@ static int load_module(struct load_info *info, const char __user *uargs,
 {
 	struct module *mod;
 	long err;
-
-<<<<<<< HEAD
-	err = module_sig_check(info);
-=======
-#ifdef CONFIG_TIMA_LKMAUTH
-	unsigned long module_len = info->len;
-#endif
 	err = module_sig_check(info, flags);
->>>>>>> 4953007... module: Invalidate signatures on force-loaded modules
 	if (err)
 		goto free_copy;
 
