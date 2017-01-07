@@ -1,0 +1,20 @@
+--- drivers/mmc/card/block.c
++++ drivers/mmc/card/block.c
+@@ -1947,7 +1948,7 @@
+ 	}
+ 
+ 	mq->flags &= ~MMC_QUEUE_NEW_REQUEST;
+-	if (req && req->cmd_flags & REQ_DISCARD) {
++	if (cmd_flags & REQ_DISCARD) {
+ 		/* complete ongoing async transfer before issuing discard */
+ 		if (card->host->areq)
+ 			mmc_blk_issue_rw_rq(mq, NULL);
+@@ -1972,7 +1973,7 @@
+ 
+ out:
+ 	if ((!req && !(mq->flags & MMC_QUEUE_NEW_REQUEST)) ||
+-	     (req && (req->cmd_flags & MMC_REQ_SPECIAL_MASK)))
++	     (cmd_flags & MMC_REQ_SPECIAL_MASK))
+ 		/*
+ 		 * Release host when there are no more requests
+ 		 * and after special request(discard, flush) is done.

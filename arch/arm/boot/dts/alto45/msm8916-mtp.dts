@@ -1,0 +1,184 @@
+/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 and
+* only version 2 as published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*/
+
+/dts-v1/;
+
+#include "msm8916-mtp.dtsi"
+#include "msm8916-memory.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. MSM 8916 MTP";
+	compatible = "qcom,msm8916-mtp", "qcom,msm8916", "qcom,mtp";
+	qcom,board-id = <8 0>;
+};
+
+/*[PLATFORM]-MOD BGEIN by TCTNB.YJ, 2014/04/14, add sensor driver */
+&tlmm_pinmux {
+	apds9930_int_pin {
+		qcom,pins = <&gp 113>;
+		qcom,pin-func = <0>;
+		qcom,num-grp-pins = <1>;
+		label = "apds9930-irq";
+		apds9930_default: apds9930_default {
+			drive-strenghth = <6>;
+			bias-pull-up;
+		};
+	};
+
+	akm_reset_pin {
+		qcom,pins = <&gp 8>;
+		qcom,pin-func = <0>;
+		qcom,num-grp-pins = <1>;
+		label = "akm_reset_pin";
+		akm_default: akm_default {
+			  drive-strength = <6>;
+			  bias-pull-up;
+		};
+		akm_sleep: akm_sleep {
+			   drive-strength = <2>;
+			   bias-pull-down;
+		};
+	};
+
+	bma2x2_int1_pin {
+		qcom,pins = <&gp 115>;
+		qcom,num-grp-pins = <1>;
+		label = "bma2x2_int1_pin";
+		bma2x2_int1_default: int1_default {
+			  drive-strength = <6>;
+			  bias-pull-up;
+		};
+	};
+
+	bma2x2_int2_pin {
+		qcom,pins = <&gp 114>;
+		qcom,num-grp-pins = <1>;
+		label = "bma2x2_int2_pin";
+		bma2x2_int2_default: int2_default {
+			  drive-strength = <6>;
+			  bias-pull-up;
+		};
+	};
+
+};
+
+&i2c_0 { /* BLSP1 QUP2 */
+	avago@39 { /* Ambient light and proximity sensor */
+		compatible = "avago,apds9900";
+		reg = <0x39>;
+		pinctrl-names = "default","sleep";
+		pinctrl-0 = <&apds99xx_default>;
+		pinctrl-1 = <&apds99xx_sleep>;
+		interrupt-parent = <&msm_gpio>;
+		interrupts = <113 0x2002>;
+		vdd-supply = <&pm8916_l17>;
+		vio-supply = <&pm8916_l6>;
+		avago,irq-gpio = <&msm_gpio 113 0x2002>;
+		avago,ps-threshold = <900>;
+		avago,ps-hysteresis-threshold = <800>;
+		avago,ps-pulse = <20>;
+		avago,ps-pgain = <4>;
+		avago,als-B = <223>;
+		avago,als-C = <70>;
+		avago,als-D = <142>;
+		avago,ga-value = <48>;
+	};
+
+	akm@c {
+		compatible = "ak,ak09911";
+		reg = <0x0c>;
+		pinctrl-names = "default","sleep";
+		pinctrl-0 = <&akm_default>;
+		pinctrl-1 = <&akm_sleep>;
+		vdd-supply = <&pm8916_l17>;
+		vio-supply = <&pm8916_l6>;
+		akm,layout = <0x3>;
+		akm,gpio_rstn = <&msm_gpio 8 0x0>;
+		akm,auto-report;
+	};
+
+	bma2x2@18 { /* Accelerometer sensor */
+		compatible = "bosch,bma2x2";
+		reg = <0x18>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&bma2x2_int1_default &bma2x2_int2_default>;
+		interrupt-parent = <&msm_gpio>;
+		interrupts = <115 0x2002>;
+		vdd-supply = <&pm8916_l6>;
+		vio-supply = <&pm8916_l6>;
+		bosch,init-interval = <200>;
+		bosch,place = <2>;
+		bosch,gpio-int1 = <&msm_gpio 115 0x2002>;
+		bosch,gpio-int2 = <&msm_gpio 114 0x2002>;
+	};
+/*[BUGFIX]-Add   by TCTNB.XQJ,FR-803287 2014/10/09,add 2nd led ic sn31xx,gpio is used for led ic*/
+        sn31@68{
+              compatible = "sn31,sn31xx";
+              reg = <0x68>;
+             sn31,en-gpio = <&msm_gpio 108 0x00>;
+              vio-supply = <&pm8916_l6>;
+ };
+/*[BUGFIX]-Ened by TCTNB.XQJ*/
+/*[BUGFIX]-Added by TCTNB.XQJ,FR-742098 2014/07/23,use external led ic*/
+        bct@30{
+              compatible = "bct,bct3253";
+              reg = <0x30>;
+              vio-supply = <&pm8916_l6>;
+ };
+/*[BUGFIX]-Ened by TCTNB.XQJ*/
+};
+/*[PLATFORM]-END by TCTNB.YJ*/
+
+/*[PLATFORM]-MOD BGEIN by TCTNB.YJ, 2014/04/05, modify temporarily for Alto45 power on SW*/
+/*&soc {
+	i2c@78b8000 {
+		smb1360_otg_supply: smb1360-chg-fg@14 {
+			compatible = "qcom,smb1360-chg-fg";
+			reg = <0x14>;
+			interrupt-parent = <&msm_gpio>;
+			interrupts = <62 2>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb_int_default>;
+			qcom,stat-pulsed-irq;
+			regulator-name = "smb1360_otg_vreg";
+
+			qcom,chg-inhibit-disabled;
+			qcom,float-voltage-mv = <4350>;
+			qcom,iterm-ma = <100>;
+//			qcom,charging-disabled;
+			qcom,recharge-thresh-mv = <100>;
+			qcom,thermal-mitigation = <1500 700 600 0>;
+		};
+	};
+};
+*/
+/*[PLATFORM]-END by TCTNB.YJ*/
+
+/*
+&usb_otg {
+	qcom,hsusb-otg-mode = <3>;
+	qcom,usbid-gpio = <&msm_gpio 110 0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&usbid_default>;
+	vbus_otg-supply = <&smb1360_otg_supply>;
+};
+*/
+
+&pm8916_chg {
+	status = "ok";
+//	qcom,use-external-charger;
+};
+
+&pm8916_bms {
+	status = "ok";
+//	qcom,disable-bms;
+};
