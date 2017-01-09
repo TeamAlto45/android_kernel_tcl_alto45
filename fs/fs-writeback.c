@@ -107,6 +107,7 @@ static void bdi_queue_work(struct backing_dev_info *bdi,
 		goto out_unlock;
 	}
 	list_add_tail(&work->list, &bdi->work_list);
+
 	mod_delayed_work(bdi_wq, &bdi->wb.dwork, 0);
 out_unlock:
 	spin_unlock_bh(&bdi->wb_lock);
@@ -171,8 +172,8 @@ void bdi_start_background_writeback(struct backing_dev_info *bdi)
 	 * We just wake up the flusher thread. It will perform background
 	 * writeback as soon as there is no other work to do.
 	 */
-	trace_writeback_wake_background(bdi);
 	bdi_wakeup_thread(bdi);
+	mod_delayed_work(bdi_wq, &bdi->wb.dwork, 0);
 }
 
 /*
@@ -1051,10 +1052,10 @@ void bdi_writeback_workfn(struct work_struct *work)
 		trace_writeback_pages_written(pages_written);
 	}
 
-	if (!list_empty(&bdi->work_list) ||
-	    (wb_has_dirty_io(wb) && dirty_writeback_interval))
-		queue_delayed_work(bdi_wq, &wb->dwork,
-			msecs_to_jiffies(dirty_writeback_interval * 10));
+	if (!list_empty(&bdi->work_list))
+		mod_delayed_work(bdi_wq, &wb->dwork, 0);
+	else if (wb_has_dirty_io(wb) && dirty_writeback_interval)
+		bdi_wakeup_thread_delayed(bdi);
 
 	current->flags &= ~PF_SWAPWRITE;
 }
