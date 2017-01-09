@@ -1354,10 +1354,9 @@ static int __perf_remove_from_context(void *info)
 }
 
 #ifdef CONFIG_SMP
-static void perf_retry_remove(struct remove_event *rep)
+static void perf_retry_remove(struct perf_event *event)
 {
 	int up_ret;
-	struct perf_event *event = rep->event;
 	/*
 	 * CPU was offline. Bring it online so we can
 	 * gracefully exit a perf context.
@@ -1365,13 +1364,14 @@ static void perf_retry_remove(struct remove_event *rep)
 	up_ret = cpu_up(event->cpu);
 	if (!up_ret)
 		/* Try the remove call once again. */
-		cpu_function_call(event->cpu, __perf_remove_from_context, rep);
+		cpu_function_call(event->cpu, __perf_remove_from_context,
+				  event);
 	else
 		pr_err("Failed to bring up CPU: %d, ret: %d\n",
 		       event->cpu, up_ret);
 }
 #else
-static void perf_retry_remove(struct remove_event *rep)
+static void perf_retry_remove(struct perf_event *event)
 {
 }
 #endif
@@ -1393,9 +1393,7 @@ static void perf_remove_from_context(struct perf_event *event, bool detach_group
 {
 	struct perf_event_context *ctx = event->ctx;
 	struct task_struct *task = ctx->task;
-	int ret;
 	struct remove_event re = {
-
 		.event = event,
 		.detach_group = detach_group,
 	};
@@ -1407,8 +1405,6 @@ static void perf_remove_from_context(struct perf_event *event, bool detach_group
 		 * Per cpu events are removed via an smp call
 		 */
 		cpu_function_call(event->cpu, __perf_remove_from_context, &re);
-		if (ret == -ENXIO)
-			perf_retry_remove(&re);
 		return;
 	}
 
