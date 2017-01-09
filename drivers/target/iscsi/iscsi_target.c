@@ -2454,7 +2454,6 @@ static void iscsit_build_conn_drop_async_message(struct iscsi_conn *conn)
 {
 	struct iscsi_cmd *cmd;
 	struct iscsi_conn *conn_p;
-	bool found = false;
 
 	/*
 	 * Only send a Asynchronous Message on connections whos network
@@ -2463,12 +2462,11 @@ static void iscsit_build_conn_drop_async_message(struct iscsi_conn *conn)
 	list_for_each_entry(conn_p, &conn->sess->sess_conn_list, conn_list) {
 		if (conn_p->conn_state == TARG_CONN_STATE_LOGGED_IN) {
 			iscsit_inc_conn_usage_count(conn_p);
-			found = true;
 			break;
 		}
 	}
 
-	if (!found)
+	if (!conn_p)
 		return;
 
 	cmd = iscsit_allocate_cmd(conn_p, GFP_ATOMIC);
