@@ -1,10 +1,11 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm 3.10.32 Kernel Configuration
+# Linux/arm 3.10.38 Kernel Configuration
 #
 
 # CONFIG_ARM_PATCH_PHYS_VIRT is not set
 CONFIG_LOCALVERSION=" "
+# CONFIG_LOCALVERSION_AUTO is not set
 CONFIG_SYSVIPC=y
 CONFIG_NO_HZ=y
 CONFIG_HIGH_RES_TIMERS=y
