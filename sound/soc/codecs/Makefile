@@ -77,7 +77,6 @@ snd-soc-msm8x16-wcd-objs += wcd9xxx-common.o wcd9xxx-resmgr.o wcd9xxx-mbhc.o
 snd-soc-msm8x16-wcd-objs += wcd9306.o wcd9306-tables.o
 snd-soc-msm8x16-wcd-objs += wcd9330.o wcd9330-tables.o
 snd-soc-msm8x16-wcd-objs += wcd9330.o wcd9330-tables.o wcdcal-hwdep.o
-snd-soc-msm8x16-wcd-objs += wcd_cpe_services.o wcd_cpe_core.o
 snd-soc-wl1273-objs := wl1273.o
 snd-soc-wm-adsp-objs := wm_adsp.o
 snd-soc-wm0010-objs := wm0010.o
