@@ -204,6 +204,7 @@ enum hal_property {
 	HAL_PARAM_VENC_ENABLE_INITIAL_QP,
 	HAL_PARAM_VENC_SEARCH_RANGE,
 	HAL_PARAM_VDEC_NON_SECURE_OUTPUT2,
+	HAL_CONFIG_VENC_PERF_MODE,
 };
 
 enum hal_domain {
@@ -1015,6 +1016,10 @@ struct hal_ltruse {
 
 struct hal_ltrmark {
 	u32 markframe;
+};
+
+struct hal_venc_perf_mode {
+	u32 mode;
 };
 
 struct hfi_scs_threshold {

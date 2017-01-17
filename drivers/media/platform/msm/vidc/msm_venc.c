@@ -1006,6 +1006,16 @@ static struct msm_vidc_ctrl msm_venc_ctrls[] = {
 		.menu_skip_mask = 0,
 		.qmenu = NULL,
 	},
+	{
+		.id = V4L2_CID_MPEG_VIDC_VIDEO_PERF_MODE,
+		.name = "Set Encoder performance mode",
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.minimum = V4L2_MPEG_VIDC_VIDEO_PERF_MAX_QUALITY,
+		.maximum = V4L2_MPEG_VIDC_VIDEO_PERF_POWER_SAVE,
+		.default_value = V4L2_MPEG_VIDC_VIDEO_PERF_MAX_QUALITY,
+		.step = 1,
+		.qmenu = NULL,
+	},
 };
 
 #define NUM_CTRLS ARRAY_SIZE(msm_venc_ctrls)
@@ -1716,6 +1726,7 @@ static int try_set_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 	struct hal_ltruse useltr;
 	struct hal_ltrmark markltr;
 	u32 hier_p_layers;
+	struct hal_venc_perf_mode venc_mode;
 
 	if (!inst || !inst->core || !inst->core->device) {
 		dprintk(VIDC_ERR, "%s invalid parameters\n", __func__);
@@ -2545,6 +2556,11 @@ static int try_set_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 		enable.enable = (ctrl->val ==
 		V4L2_MPEG_VIDC_VIDEO_RATE_CONTROL_TIMESTAMP_MODE_IGNORE);
 		pdata = &enable;
+		break;
+	case V4L2_CID_MPEG_VIDC_VIDEO_PERF_MODE:
+		property_id = HAL_CONFIG_VENC_PERF_MODE;
+		venc_mode.mode = ctrl->val;
+		pdata = &venc_mode;
 		break;
 	default:
 		dprintk(VIDC_ERR, "Unsupported index: %x\n", ctrl->id);
