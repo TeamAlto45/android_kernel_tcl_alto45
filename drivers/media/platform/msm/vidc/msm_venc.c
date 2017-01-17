@@ -1271,7 +1271,7 @@ static int msm_venc_toggle_hier_p(struct msm_vidc_inst *inst, int layers)
 		(inst->fmts[CAPTURE_PORT]->fourcc != V4L2_PIX_FMT_H264))
 		return 0;
 
-	num_enh_layers = layers ? : 0
+	num_enh_layers = layers ? : 0;
 	dprintk(VIDC_DBG, "%s Hier-P in firmware\n",
 			num_enh_layers ? "Enable" : "Disable");
 
